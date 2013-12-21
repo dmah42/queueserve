@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"qcommon"
 )
 
 var (
@@ -33,7 +34,7 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("creating queue %q", name)
 	queues[name] = newQueue()
 
-	idData := struct { Id string }{Id: name}
+	idData := qcommon.IdData{Id: qcommon.QueueId(name)}
 	b, err := json.Marshal(idData)
 	if err != nil {
 		http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
@@ -61,7 +62,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("getting queue %q", name)
-	idData := struct { Id string }{Id: name}
+	idData := qcommon.IdData{Id: qcommon.QueueId(name)}
 	b, err := json.Marshal(idData)
 	if err != nil {
 		http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
@@ -142,12 +143,8 @@ func dequeueHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("dequeue %q %q", id, object)
 
-	// TODO: shared objects
-	idObjectData := struct {
-		Id	string
-		Object	[]byte
-	} {
-		Id:	id,
+	idObjectData := qcommon.IdObjectData{
+		Id:	qcommon.QueueId(id),
 		Object:	object,
 	}
 	b, err := json.Marshal(idObjectData)

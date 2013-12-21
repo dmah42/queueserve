@@ -6,22 +6,21 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"qcommon"
 	"sync/atomic"
 	"time"
 )
 
-type QueueId string
 type QueueEntityId string
-type Object []byte
 
 type ReadResponse struct {
-	Id	QueueId
+	Id	qcommon.QueueId
 	EntityId	QueueEntityId
-	Object	Object
+	Object	qcommon.Object
 }
 
 type ActiveReadKey struct {
-	id	QueueId
+	id	qcommon.QueueId
 	entityId	QueueEntityId
 }
 
@@ -40,7 +39,7 @@ func apiUrl(path string) string {
 	return fmt.Sprintf("http://%s:%d/%s", Host, Port, path)
 }
 
-func CreateQueue(name string) (QueueId, error) {
+func CreateQueue(name string) (qcommon.QueueId, error) {
 	resp, err := http.PostForm(apiUrl("create"), url.Values{"name": {name}})
 	if err != nil {
 		return nullId, err
@@ -54,15 +53,15 @@ func CreateQueue(name string) (QueueId, error) {
 		return nullId, err
 	}
 
-	idData := new(struct { Id string })
+	idData := new(qcommon.IdData)
 	err = json.Unmarshal(body, &idData)
 	if err != nil {
 		return nullId, err
 	}
-	return QueueId(idData.Id), nil
+	return idData.Id, nil
 }
 
-func GetQueue(name string) (QueueId, error) {
+func GetQueue(name string) (qcommon.QueueId, error) {
 	resp, err := http.PostForm(apiUrl("get"), url.Values{"name": {name}})
 	if err != nil {
 		return nullId, err
@@ -76,15 +75,15 @@ func GetQueue(name string) (QueueId, error) {
 		return nullId, err
 	}
 
-	idData := new(struct { Id string })
+	idData := new(qcommon.IdData)
 	err = json.Unmarshal(body, &idData)
 	if err != nil {
 		return nullId, err
 	}
-	return QueueId(idData.Id), nil
+	return idData.Id, nil
 }
 
-func DeleteQueue(id QueueId) error {
+func DeleteQueue(id qcommon.QueueId) error {
 	resp, err := http.PostForm(apiUrl("delete"), url.Values{"id": {string(id)}})
 	if err != nil {
 		return err
@@ -101,7 +100,7 @@ func DeleteQueue(id QueueId) error {
 	return nil
 }
 
-func Enqueue(id QueueId, object Object) error {
+func Enqueue(id qcommon.QueueId, object qcommon.Object) error {
 	resp, err := http.PostForm(apiUrl("enqueue"), url.Values{"id": {string(id)}, "object": {string(object)}})
 	if err != nil {
 		return err
@@ -127,7 +126,7 @@ func readTimeout(readResponse *ReadResponse) {
 // Read actually dequeues from the server and then sets a timeout to re-enqueue the same object.
 // Dequeue can then be implemented as a cancelation of the timeout. This ensures that the same
 // object won't be dequeued from the server while it is being read.
-func Read(id QueueId, timeout int) (*ReadResponse, error) {
+func Read(id qcommon.QueueId, timeout int) (*ReadResponse, error) {
 	resp, err := http.PostForm(apiUrl("dequeue"), url.Values{"id": {string(id)}})
 	if err != nil {
 		return nil, err
@@ -140,11 +139,7 @@ func Read(id QueueId, timeout int) (*ReadResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	idObjectData := new(struct {
-		Id	QueueId
-		Object	[]byte
-	})
+	idObjectData := new(qcommon.IdObjectData)
 	err = json.Unmarshal(body, &idObjectData)
 	if err != nil {
 		return nil, err
@@ -154,7 +149,7 @@ func Read(id QueueId, timeout int) (*ReadResponse, error) {
 	readResponse := ReadResponse{
 		Id:		idObjectData.Id,
 		EntityId:	entityId,
-		Object:		Object(idObjectData.Object),
+		Object:		idObjectData.Object,
 	}
 	key := ActiveReadKey{id: readResponse.Id, entityId: readResponse.EntityId}
 	if _, present := activeReads[key]; present {
@@ -167,7 +162,7 @@ func Read(id QueueId, timeout int) (*ReadResponse, error) {
 	return &readResponse, nil
 }
 
-func Dequeue(id QueueId, entityId QueueEntityId) error {
+func Dequeue(id qcommon.QueueId, entityId QueueEntityId) error {
 	key := ActiveReadKey{id: id, entityId: entityId,}
 	timer, present := activeReads[key]
 	if !present {

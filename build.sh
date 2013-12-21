@@ -2,6 +2,9 @@
 
 export GOPATH=`pwd`
 
+echo "installing qcommon"
+go install qcommon
+
 echo "building and testing qserver"
 go build qserver
 go test qserver
