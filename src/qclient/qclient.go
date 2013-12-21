@@ -26,19 +26,22 @@ type ActiveReadKey struct {
 }
 
 const (
-	// TODO: flag
-	port = 4242
 	nullId = ""
 )
 
 var (
-	Host = fmt.Sprintf("http://localhost:%d", port)
+	Port = 4242
+	Host = "localhost"
 	activeReads = map[ActiveReadKey](*time.Timer){}
 	queueEntityId int32 = 0
 )
 
+func apiUrl(path string) string {
+	return fmt.Sprintf("http://%s:%d/%s", Host, Port, path)
+}
+
 func CreateQueue(name string) (QueueId, error) {
-	resp, err := http.PostForm(Host + "/create", url.Values{"name": {name}})
+	resp, err := http.PostForm(apiUrl("create"), url.Values{"name": {name}})
 	if err != nil {
 		return nullId, err
 	}
@@ -60,7 +63,7 @@ func CreateQueue(name string) (QueueId, error) {
 }
 
 func GetQueue(name string) (QueueId, error) {
-	resp, err := http.PostForm(Host + "/get", url.Values{"name": {name}})
+	resp, err := http.PostForm(apiUrl("get"), url.Values{"name": {name}})
 	if err != nil {
 		return nullId, err
 	}
@@ -82,7 +85,7 @@ func GetQueue(name string) (QueueId, error) {
 }
 
 func DeleteQueue(id QueueId) error {
-	resp, err := http.PostForm(Host + "/delete", url.Values{"id": {string(id)}})
+	resp, err := http.PostForm(apiUrl("delete"), url.Values{"id": {string(id)}})
 	if err != nil {
 		return err
 	}
@@ -99,7 +102,7 @@ func DeleteQueue(id QueueId) error {
 }
 
 func Enqueue(id QueueId, object Object) error {
-	resp, err := http.PostForm(Host + "/enqueue", url.Values{"id": {string(id)}, "object": {string(object)}})
+	resp, err := http.PostForm(apiUrl("enqueue"), url.Values{"id": {string(id)}, "object": {string(object)}})
 	if err != nil {
 		return err
 	}
@@ -125,7 +128,7 @@ func readTimeout(readResponse *ReadResponse) {
 // Dequeue can then be implemented as a cancelation of the timeout. This ensures that the same
 // object won't be dequeued from the server while it is being read.
 func Read(id QueueId, timeout int) (*ReadResponse, error) {
-	resp, err := http.PostForm(Host + "/dequeue", url.Values{"id": {string(id)}})
+	resp, err := http.PostForm(apiUrl("dequeue"), url.Values{"id": {string(id)}})
 	if err != nil {
 		return nil, err
 	}

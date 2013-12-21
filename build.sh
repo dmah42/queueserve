@@ -7,12 +7,12 @@ go build qserver
 go test qserver
 
 echo "running qserver"
-./qserver &
+./qserver --port=4242 &
 PID=$!
 
 echo "installing and testing qclient"
 go install qclient
-go test qclient
+go test qclient --port=4242 --host=localhost
 
 echo "killing qserver"
 kill $PID

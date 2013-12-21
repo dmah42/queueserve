@@ -2,6 +2,7 @@ package qclient
 
 import (
 	"bytes"
+	"flag"
 	"testing"
 	"time"
 )
@@ -12,9 +13,18 @@ const (
 
 var (
 	object = []byte("hello queue server")
+	host = flag.String("host", "localhost", "qserver host")
+	port = flag.Int("port", 4242, "qserver port")
 )
 
+func initQClient() {
+	flag.Parse()
+	Host = *host
+	Port = *port
+}
+
 func TestCreate(t *testing.T) {
+	initQClient()
 	id, err := CreateQueue(queueName)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

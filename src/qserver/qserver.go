@@ -2,17 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 )
 
-const (
-	// TODO: flag
-	port = 4242
-)
-
 var (
+	port = flag.Int("port", 4242, "port to listen on")
 	queues = map[string](*queue){}
 )
 
@@ -169,5 +166,6 @@ func main() {
 	http.HandleFunc("/enqueue", enqueueHandler)
 	http.HandleFunc("/dequeue", dequeueHandler)
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+	flag.Parse()
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }
