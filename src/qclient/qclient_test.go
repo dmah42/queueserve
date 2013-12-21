@@ -1,7 +1,9 @@
 package qclient
 
 import (
+	"bytes"
 	"testing"
+	"time"
 )
 
 const (
@@ -15,7 +17,7 @@ var (
 func TestCreate(t *testing.T) {
 	id, err := CreateQueue(queueName)
 	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+		t.Errorf("unexpected error: %v", err)
 		return
 	}
 	if id != queueName {
@@ -27,52 +29,116 @@ func TestCreate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	err := DeleteQueue(queueName)
 	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+		t.Errorf("unexpected error: %v", err)
 		return
 	}
 }
 
 func TestGet(t *testing.T) {
-	_, err := CreateQueue(queueName)
-	if err != nil {
-		t.Errorf("Unexpected create error: %v", err)
-		return
-	}
+	CreateQueue(queueName)
 	id, err := GetQueue(queueName)
 	if err != nil {
-		t.Errorf("Unexpected get error: %v", err)
+		t.Errorf("unexpected get error: %v", err)
 		return
 	}
 	if id != queueName {
 		t.Errorf("want %q, got %q", queueName, id)
 		return
 	}
-	err = DeleteQueue(id)
-	if err != nil {
-		t.Errorf("Unexpected delete error: %v", err)
-		return
-	}
+	DeleteQueue(id)
 }
 
 func TestEnqueue(t *testing.T) {
-	id, err := CreateQueue(queueName)
+	id, _ := CreateQueue(queueName)
+	err := Enqueue(id, object)
 	if err != nil {
-		t.Errorf("Unexpected create error: %v", err)
+		t.Errorf("unexpected enqueue error: %v", err)
 		return
 	}
-	err = Enqueue(id, object)
+	DeleteQueue(queueName)
+}
+
+func TestReadDequeue(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+	Enqueue(id, object)
+	response, err := Read(id, 2)
 	if err != nil {
-		t.Errorf("Unexpected enqueue error: %v", err)
+		t.Errorf("unexpected read error: %v", err)
 		return
 	}
-	err = DeleteQueue(queueName)
+	if response.Id != id || !bytes.Equal(response.Object, object) {
+		t.Errorf("want %q | %q, got %q | %q", response.Id, response.Object, id, object)
+		return
+	}
+	if err := Dequeue(id, response.EntityId); err != nil {
+		t.Errorf("unexpected dequeue error: %v", err)
+		return
+	}
+
+	_, err = Read(id, 2)
+	if err == nil {
+		t.Errorf("expected read error on empty queue")
+		return
+	}
+	DeleteQueue(id)
+}
+
+func TestReadTimeout(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+	Enqueue(id, object)
+	response, err := Read(id, 2)
 	if err != nil {
-		t.Errorf("Unexpected delete error: %v", err)
+		t.Errorf("unexpected read error: %v", err)
+		return
+	}
+	if response.Id != id || !bytes.Equal(response.Object, object) {
+		t.Errorf("want %q | %q, got %q | %q", response.Id, response.Object, id, object)
+		return
+	}
+	// Simulate processing failure
+	time.Sleep(time.Duration(3) * time.Second)
+
+	// Object should now be ready to read again
+	response, err = Read(id, 2)
+	if err != nil {
+		t.Errorf("unexpected read error: %v", err)
+		return
+	}
+	if response.Id != id || !bytes.Equal(response.Object, object) {
+		t.Errorf("want %q | %q, got %q | %q", response.Id, response.Object, id, object)
+		return
+	}
+	if err := Dequeue(id, response.EntityId); err != nil {
+		t.Errorf("unexpected dequeue error: %v", err)
+		return
+	}
+
+	_, err = Read(id, 2)
+	if err == nil {
+		t.Errorf("expected read error on empty queue")
+		return
+	}
+	DeleteQueue(id)
+}
+
+func TestReadWithoutEnqueue(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+	_, err := Read(id, 2)
+	if err == nil {
+		t.Errorf("expected read error on empty queue")
 		return
 	}
 }
 
-// TODO: test read
+func TestDequeueWithoutRead(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+	Enqueue(id, object)
+	if err := Dequeue(id, "0"); err == nil {
+		t.Errorf("expected dequeue error without read")
+		return
+	}
+}
+
 // TODO: concurrent enqueue
 // TODO: concurrent dequeue
 // TODO: concurrent enqueue/dequeue

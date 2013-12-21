@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,6 +34,7 @@ const (
 var (
 	Host = fmt.Sprintf("http://localhost:%d", port)
 	activeReads = map[ActiveReadKey](*time.Timer){}
+	queueEntityId int32 = 0
 )
 
 func CreateQueue(name string) (QueueId, error) {
@@ -119,25 +121,11 @@ func readTimeout(readResponse *ReadResponse) {
 	delete(activeReads, key)
 }
 
-func doDequeue(readResponse *ReadResponse) error{
-	resp, err := http.PostForm(Host + "/dequeue", url.Values{"id": {string(readResponse.Id)}, "entityId": {string(readResponse.EntityId)}})
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(resp.Status)
-	}
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
+// Read actually dequeues from the server and then sets a timeout to re-enqueue the same object.
+// Dequeue can then be implemented as a cancelation of the timeout. This ensures that the same
+// object won't be dequeued from the server while it is being read.
 func Read(id QueueId, timeout int) (*ReadResponse, error) {
-	resp, err := http.PostForm(Host + "/read", url.Values{"id": {string(id)}})
+	resp, err := http.PostForm(Host + "/dequeue", url.Values{"id": {string(id)}})
 	if err != nil {
 		return nil, err
 	}
@@ -150,25 +138,30 @@ func Read(id QueueId, timeout int) (*ReadResponse, error) {
 		return nil, err
 	}
 
-	readResponse := new(ReadResponse)
-	err = json.Unmarshal(body, &readResponse)
+	idObjectData := new(struct {
+		Id	QueueId
+		Object	[]byte
+	})
+	err = json.Unmarshal(body, &idObjectData)
 	if err != nil {
 		return nil, err
 	}
 
-	key := ActiveReadKey{id: readResponse.Id, entityId: readResponse.EntityId,}
+	entityId := QueueEntityId(fmt.Sprintf("%d", atomic.AddInt32(&queueEntityId, 1)))
+	readResponse := ReadResponse{
+		Id:		idObjectData.Id,
+		EntityId:	entityId,
+		Object:		Object(idObjectData.Object),
+	}
+	key := ActiveReadKey{id: readResponse.Id, entityId: readResponse.EntityId}
 	if _, present := activeReads[key]; present {
 		return nil, fmt.Errorf("Attempt to read already active read")
 	}
 
-	if err = doDequeue(readResponse); err != nil {
-		return readResponse, err
-	}
-
-	t := time.AfterFunc(time.Duration(timeout) * time.Second, func() { readTimeout(readResponse) })
+	t := time.AfterFunc(time.Duration(timeout) * time.Second, func() { readTimeout(&readResponse) })
 	activeReads[key] = t
 
-	return readResponse, nil
+	return &readResponse, nil
 }
 
 func Dequeue(id QueueId, entityId QueueEntityId) error {

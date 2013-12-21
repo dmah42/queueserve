@@ -22,6 +22,7 @@ func newQueue() *queue {
 	return q
 }
 
+// atomically enqueue a byte slice
 func (q *queue) enqueue(object []byte) {
 	newNode := new(node)
 	newNode.object = object
@@ -48,6 +49,7 @@ func (q *queue) enqueue(object []byte) {
 	atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&q.tail)), unsafe.Pointer(oldTail), unsafe.Pointer(newNode))
 }
 
+// atomically dequeue a byte slice. Returns nil, false if the queue is empty.
 func (q *queue) dequeue() ([]byte, bool) {
 	var object []byte
 	removed := false

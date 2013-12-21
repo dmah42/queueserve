@@ -97,15 +97,69 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func enqueueHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	if r.Method != "POST" {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.ParseForm() != nil {
+		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
+		return
+	}
+
+	id := r.Form["id"][0]
+	q, present := queues[id];
+	if !present {
+		http.Error(w, fmt.Sprintf("Queue %q doesn't exist", id), http.StatusNotFound)
+		return
+	}
+
+	object := r.Form["object"][0]
+	log.Printf("enqueue %q %q", id, object)
+	q.enqueue([]byte(object))
+	w.WriteHeader(http.StatusOK)
 }
 
 func dequeueHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
+	if r.Method != "POST" {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 
-func readHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	if r.ParseForm() != nil {
+		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
+		return
+	}
+
+	id := r.Form["id"][0]
+	q, present := queues[id];
+	if !present {
+		http.Error(w, fmt.Sprintf("Queue %q doesn't exist", id), http.StatusNotFound)
+		return
+	}
+	object, valid := q.dequeue()
+	if !valid {
+		http.Error(w, "Attempt to dequeue from empty queue", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("dequeue %q %q", id, object)
+
+	// TODO: shared objects
+	idObjectData := struct {
+		Id	string
+		Object	[]byte
+	} {
+		Id:	id,
+		Object:	object,
+	}
+	b, err := json.Marshal(idObjectData)
+	if err != nil {
+		http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
 
 func main() {
@@ -114,7 +168,6 @@ func main() {
 	http.HandleFunc("/delete", deleteHandler)
 	http.HandleFunc("/enqueue", enqueueHandler)
 	http.HandleFunc("/dequeue", dequeueHandler)
-	http.HandleFunc("/read", readHandler)
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
