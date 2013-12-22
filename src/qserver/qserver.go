@@ -21,18 +21,30 @@ func vLog(format string, a ...interface{}) {
 	}
 }
 
-func createHandler(w http.ResponseWriter, r *http.Request) {
+// returns the form value for the given key, or an error message/http status code pair.
+func getFormValue(r *http.Request, key string) (string, int) {
 	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
+		return "POST only", http.StatusMethodNotAllowed
 	}
 
 	if r.ParseForm() != nil {
-		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
+		return "Unable to parse form values", http.StatusBadRequest
+	}
+
+	if len(r.Form[key]) == 0 {
+		return fmt.Sprintf("Missing key: %q", key), http.StatusBadRequest
+	}
+
+	return r.Form[key][0], http.StatusOK
+}
+
+func createHandler(w http.ResponseWriter, r *http.Request) {
+	name, status := getFormValue(r, "name")
+	if status != http.StatusOK {
+		http.Error(w, name, status)
 		return
 	}
 
-	name := r.Form["name"][0]
 	if _, present := queues[name]; present {
 		http.Error(w, "Queue already exists", http.StatusConflict)
 		return
@@ -52,17 +64,12 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	name, status := getFormValue(r, "name")
+	if status != http.StatusOK {
+		http.Error(w, name, status)
 		return
 	}
 
-	if r.ParseForm() != nil {
-		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
-		return
-	}
-
-	name := r.Form["name"][0]
 	if _, present := queues[name]; !present {
 		http.Error(w, "Queue doesn't exist", http.StatusNotFound)
 		return
@@ -80,17 +87,12 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	id, status := getFormValue(r, "id")
+	if status != http.StatusOK {
+		http.Error(w, id, status)
 		return
 	}
 
-	if r.ParseForm() != nil {
-		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
-		return
-	}
-
-	id := r.Form["id"][0]
 	if _, present := queues[id]; !present {
 		http.Error(w, "Queue doesn't exist", http.StatusNotFound)
 		return
@@ -102,23 +104,23 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func enqueueHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	id, status := getFormValue(r, "id")
+	if status != http.StatusOK {
+		http.Error(w, id, status)
 		return
 	}
 
-	if r.ParseForm() != nil {
-		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
-		return
-	}
-
-	id := r.Form["id"][0]
 	q, present := queues[id];
 	if !present {
 		http.Error(w, fmt.Sprintf("Queue %q doesn't exist", id), http.StatusNotFound)
 		return
 	}
 
+	// TODO: extend getFormValue to take a slice of keys and return errors as appropriate.
+	if len(r.Form["object"]) == 0 {
+		http.Error(w, "Missing object field", http.StatusBadRequest)
+		return
+	}
 	object := r.Form["object"][0]
 	vLog("enqueue %q %q", id, object)
 	q.enqueue([]byte(object))
@@ -126,17 +128,12 @@ func enqueueHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dequeueHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	id, status := getFormValue(r, "id")
+	if status != http.StatusOK {
+		http.Error(w, id, status)
 		return
 	}
 
-	if r.ParseForm() != nil {
-		http.Error(w, "Unable to parse form values", http.StatusBadRequest)
-		return
-	}
-
-	id := r.Form["id"][0]
 	q, present := queues[id];
 	if !present {
 		http.Error(w, fmt.Sprintf("Queue %q doesn't exist", id), http.StatusNotFound)
