@@ -32,7 +32,7 @@ if [ "200" != "$STATUS" ]; then
   echo "failed to create queue: $STATUS" && exit
 fi
 
-echo "starting test clients"
+echo "starting $CLIENT_COUNT test clients"
 for i in {0..$CLIENT_COUNT}; do
   ./testqclient --host=$HOST --port=$PORT --count=$OP_COUNT &
 done

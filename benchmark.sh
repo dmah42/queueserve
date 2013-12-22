@@ -5,8 +5,8 @@ export GOPATH=`pwd`
 ./build.sh
 
 echo "qserver"
-# BenchmarkRead runs too long if --benchtime > ~0.2
-go test qserver --bench=. --benchtime=200ms
+# BenchmarkRead runs too long if --benchtime > ~200ms
+go test qserver --bench=. --benchtime=0.2
 
 ./qserver --port=4242 &
 PID=$!

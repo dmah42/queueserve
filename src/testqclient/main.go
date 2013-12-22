@@ -37,7 +37,7 @@ func main() {
 		} else {
 			resp, err := qclient.Read(id, readTimeout)
 			if err != nil {
-				log.Printf("read: %v", err)
+//				log.Printf("read: %v", err)
 				continue
 			}
 			if err = qclient.Dequeue(id, resp.EntityId); err != nil {
