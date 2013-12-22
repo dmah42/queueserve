@@ -45,12 +45,12 @@ func CreateQueue(name string) (qcommon.QueueId, error) {
 		return nullId, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nullId, fmt.Errorf(resp.Status)
-	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nullId, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nullId, fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	idData := new(qcommon.IdData)
@@ -67,12 +67,12 @@ func GetQueue(name string) (qcommon.QueueId, error) {
 		return nullId, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nullId, fmt.Errorf(resp.Status)
-	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nullId, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nullId, fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	idData := new(qcommon.IdData)
@@ -89,12 +89,12 @@ func DeleteQueue(id qcommon.QueueId) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(resp.Status)
-	}
-	_, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	return nil
@@ -106,12 +106,12 @@ func Enqueue(id qcommon.QueueId, object qcommon.Object) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(resp.Status)
-	}
-	_, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	return nil
@@ -126,19 +126,21 @@ func readTimeout(readResponse *ReadResponse) {
 // Read actually dequeues from the server and then sets a timeout to re-enqueue the same object.
 // Dequeue can then be implemented as a cancelation of the timeout. This ensures that the same
 // object won't be dequeued from the server while it is being read.
-func Read(id qcommon.QueueId, timeout int) (*ReadResponse, error) {
+func Read(id qcommon.QueueId, timeout time.Duration) (*ReadResponse, error) {
 	resp, err := http.PostForm(apiUrl("dequeue"), url.Values{"id": {string(id)}})
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(resp.Status)
-	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: %s", resp.Status, string(body))
+	}
+
 	idObjectData := new(qcommon.IdObjectData)
 	err = json.Unmarshal(body, &idObjectData)
 	if err != nil {
@@ -156,7 +158,7 @@ func Read(id qcommon.QueueId, timeout int) (*ReadResponse, error) {
 		return nil, fmt.Errorf("Attempt to read already active read")
 	}
 
-	t := time.AfterFunc(time.Duration(timeout) * time.Second, func() { readTimeout(&readResponse) })
+	t := time.AfterFunc(timeout, func() { readTimeout(&readResponse) })
 	activeReads[key] = t
 
 	return &readResponse, nil
