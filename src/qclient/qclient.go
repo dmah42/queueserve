@@ -147,6 +147,10 @@ func Read(id qcommon.QueueId, timeout time.Duration) (*ReadResponse, error) {
 		return nil, err
 	}
 
+	if idObjectData.Id != id {
+		return nil, fmt.Errorf("Mismatch queue ids: %q vs %q", idObjectData.Id, id)
+	}
+
 	entityId := QueueEntityId(fmt.Sprintf("%d", atomic.AddInt32(&queueEntityId, 1)))
 	readResponse := ReadResponse{
 		Id:		idObjectData.Id,
@@ -170,7 +174,9 @@ func Dequeue(id qcommon.QueueId, entityId QueueEntityId) error {
 	if !present {
 		return fmt.Errorf("Attempt to dequeue item without reading")
 	}
-	timer.Stop()
+	if (!timer.Stop()) {
+		return fmt.Errorf("Read timed out")
+	}
 	delete(activeReads, key)
 	return nil
 }
