@@ -5,19 +5,10 @@ export GOPATH=`pwd`
 echo "installing qcommon"
 go install qcommon
 
-echo "building and testing qserver"
-go build qserver
-go test qserver
-
-echo "running qserver"
-./qserver --port=4242 &
-PID=$!
-
-echo "installing and testing qclient"
+echo "installing qclient"
 go install qclient
-go test qclient --port=4242 --host=localhost
 
-echo "killing qserver"
-kill $PID
+echo "building qserver"
+go build qserver
 
 echo "done"
