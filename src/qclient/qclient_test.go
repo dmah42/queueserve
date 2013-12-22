@@ -3,6 +3,7 @@ package qclient
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -15,6 +16,7 @@ var (
 	object = []byte("hello queue server")
 	host = flag.String("host", "localhost", "qserver host")
 	port = flag.Int("port", 4242, "qserver port")
+	load = flag.Int("load", 1000, "number of concurrent events to test")
 )
 
 func initQClient() {
@@ -53,6 +55,16 @@ func TestGet(t *testing.T) {
 	}
 	if id != queueName {
 		t.Errorf("want %q, got %q", queueName, id)
+		return
+	}
+	DeleteQueue(id)
+}
+
+func TestDuplicateCreate(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+	_, err := CreateQueue(queueName)
+	if err == nil {
+		t.Errorf("expected duplicate creation error")
 		return
 	}
 	DeleteQueue(id)
@@ -138,6 +150,7 @@ func TestReadWithoutEnqueue(t *testing.T) {
 		t.Errorf("expected read error on empty queue")
 		return
 	}
+	DeleteQueue(id)
 }
 
 func TestDequeueWithoutRead(t *testing.T) {
@@ -147,8 +160,98 @@ func TestDequeueWithoutRead(t *testing.T) {
 		t.Errorf("expected dequeue error without read")
 		return
 	}
+	DeleteQueue(id)
 }
 
-// TODO: concurrent enqueue
-// TODO: concurrent dequeue
+func TestConcurrentEnqueue(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+
+	errorChan := make(chan int)
+	for i := 0; i < *load; i++ {
+		s := fmt.Sprintf("%d", i)
+		go func(i int) {
+			err := Enqueue(id, []byte(s))
+			if err != nil {
+				errorChan <- 1
+			}
+			if i+1 == *load {
+				errorChan <- -1
+			}
+		}(i)
+	}
+
+	var errorCount int
+	done := false
+	for {
+		if done {
+			break
+		}
+
+		select {
+			case i := <-errorChan:
+				if i < 0 {
+					done = true
+				} else {
+					errorCount += i
+				}
+		}
+	}
+
+	if errorCount != 0 {
+		t.Errorf("Expected 0 errors, got %d", errorCount)
+		return
+	}
+	DeleteQueue(id)
+}
+
+func TestConcurrentDequeue(t *testing.T) {
+	id, _ := CreateQueue(queueName)
+
+	for i := 0; i < *load; i++ {
+		s := fmt.Sprintf("%d", i)
+		go func() {
+			Enqueue(id, []byte(s))
+		}()
+	}
+
+	errorChan := make(chan int)
+	for i := 0; i < *load; i++ {
+		go func(i int) {
+			resp, err := Read(id, 2)
+			if err != nil {
+				errorChan <- 1
+			}
+			if err = Dequeue(id, resp.EntityId); err != nil {
+				errorChan <- 1
+			}
+			if i+1 == *load {
+				errorChan <- -1
+			}
+		}(i)
+	}
+
+	var errorCount int
+	done := false
+	for {
+		if done {
+			break
+		}
+
+		select {
+			case i := <-errorChan:
+				if i < 0 {
+					done = true
+				} else {
+					errorCount += i
+				}
+		}
+	}
+
+	if errorCount != 0 {
+		t.Errorf("Expected 0 errors, got %d", errorCount)
+		return
+	}
+	DeleteQueue(id)
+}
+
 // TODO: concurrent enqueue/dequeue

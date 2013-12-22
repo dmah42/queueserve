@@ -11,8 +11,15 @@ import (
 
 var (
 	port = flag.Int("port", 4242, "port to listen on")
+	verbose = flag.Bool("verbose", false, "verbose logging")
 	queues = map[string](*queue){}
 )
+
+func vLog(format string, a ...interface{}) {
+	if *verbose {
+		log.Printf(format, a...)
+	}
+}
 
 func createHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -31,7 +38,7 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("creating queue %q", name)
+	vLog("creating queue %q", name)
 	queues[name] = newQueue()
 
 	idData := qcommon.IdData{Id: qcommon.QueueId(name)}
@@ -61,7 +68,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("getting queue %q", name)
+	vLog("getting queue %q", name)
 	idData := qcommon.IdData{Id: qcommon.QueueId(name)}
 	b, err := json.Marshal(idData)
 	if err != nil {
@@ -89,7 +96,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("deleting queue %q", id)
+	vLog("deleting queue %q", id)
 	delete(queues, id)
 	w.WriteHeader(http.StatusOK)
 }
@@ -113,7 +120,7 @@ func enqueueHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	object := r.Form["object"][0]
-	log.Printf("enqueue %q %q", id, object)
+	vLog("enqueue %q %q", id, object)
 	q.enqueue([]byte(object))
 	w.WriteHeader(http.StatusOK)
 }
@@ -141,7 +148,7 @@ func dequeueHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("dequeue %q %q", id, object)
+	vLog("dequeue %q %q", id, object)
 
 	idObjectData := qcommon.IdObjectData{
 		Id:	qcommon.QueueId(id),

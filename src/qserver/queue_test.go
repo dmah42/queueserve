@@ -116,7 +116,7 @@ func TestReadWrite(t *testing.T) {
 	}
 
 	var enqCount, deqCount int
-	var enqEnd, deqEnd bool
+	enqEnd, deqEnd := false, false
 
 	for {
 		if enqEnd && deqEnd {
