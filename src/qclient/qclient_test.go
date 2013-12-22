@@ -163,6 +163,7 @@ func TestDequeueWithoutRead(t *testing.T) {
 	DeleteQueue(id)
 }
 
+// TODO: benchmark
 func TestConcurrentEnqueue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
 
@@ -204,6 +205,7 @@ func TestConcurrentEnqueue(t *testing.T) {
 	DeleteQueue(id)
 }
 
+// TODO: benchmark
 func TestConcurrentDequeue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
 

@@ -1,18 +1,17 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"sync"
 	"testing"
 )
 
-const (
-	count = 10000
-)
-
 var (
 	q *queue
 	data []string
+
+	count = flag.Int("count", 10000, "number of concurrent read/writes")
 )
 
 func contains(arr []string, s string) bool {
@@ -44,7 +43,7 @@ func TestSingleGoroutine(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	var waitgroup sync.WaitGroup
-	for i := 0; i < count; i++ {
+	for i := 0; i < *count; i++ {
 		s := fmt.Sprintf("%d", i)
 		data = append(data, s)
 		waitgroup.Add(1)
@@ -56,11 +55,28 @@ func TestWrite(t *testing.T) {
 	waitgroup.Wait()
 }
 
+func BenchmarkWrite(b *testing.B) {
+	bmData := make([]string, b.N)
+	for i := 0; i < b.N; i++ {
+		bmData[i] = fmt.Sprintf("%d", i)
+	}
+	var waitgroup sync.WaitGroup
+	waitgroup.Add(b.N)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func(i int) {
+			q.enqueue([]byte(bmData[i]))
+			waitgroup.Done()
+		}(i)
+	}
+	waitgroup.Wait()
+}
+
 func TestRead(t *testing.T) {
 	var waitgroup sync.WaitGroup
 
 	var results []*string
-	for i := 0; i < count; i++ {
+	for i := 0; i < *count; i++ {
 		s := new(string)
 		results = append(results, s)
 
@@ -77,7 +93,7 @@ func TestRead(t *testing.T) {
 	}
 
 	waitgroup.Wait()
-	for i := 0; i < count; i++ {
+	for i := 0; i < *count; i++ {
 		s := *(results[i])
 		if !contains(data, *(results[i])) {
 			t.Errorf("%q was not enqueue", s)
@@ -90,16 +106,38 @@ func TestRead(t *testing.T) {
 	}
 }
 
+/* TODO
+func BenchmarkRead(b *testing.B) {
+	bmData := make([]string, b.N)
+	for i := 0; i < b.N; i++ {
+		bmData[i] = fmt.Sprintf("%d", i)
+		q.enqueue([]byte(bmData[i]))
+	}
+
+	var waitgroup sync.WaitGroup
+	waitgroup.Add(b.N)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			q.dequeue()
+			waitgroup.Done()
+		}()
+	}
+	waitgroup.Wait()
+}
+*/
+
 func TestReadWrite(t *testing.T) {
 	enq := make(chan int)
 	deq := make(chan int)
 
-	for i := 0; i < 2 * count; i++ {
+	for i := 0; i < 2 * *count; i++ {
 		go func(i int) {
 			if i % 2 == 0 {
 				q.enqueue([]byte(data[i/2]))
 				enq <- 1
-				if (i/2)+1 == count {
+				if (i/2)+1 == *count {
 					enq <- -1
 				}
 			} else {
@@ -108,7 +146,7 @@ func TestReadWrite(t *testing.T) {
 				} else {
 					deq <- 0
 				}
-				if (i/2)+1 == count {
+				if (i/2)+1 == *count {
 					deq <- -1
 				}
 			}
@@ -139,13 +177,13 @@ func TestReadWrite(t *testing.T) {
 		}
 	}
 
-	if enqCount != count {
-		t.Errorf("%d enqueue operations failed", count - enqCount)
+	if enqCount != *count {
+		t.Errorf("%d enqueue operations failed", *count - enqCount)
 		return
 	}
 
-	if deqCount != count {
-		t.Errorf("%d dequeue operations failed", count - deqCount)
+	if deqCount != *count {
+		t.Errorf("%d dequeue operations failed", *count - deqCount)
 		return
 	}
 
@@ -154,3 +192,22 @@ func TestReadWrite(t *testing.T) {
 		return
 	}
 }
+
+func BenchmarkReadWrite(b *testing.B) {
+	bmData := make([]string, b.N)
+	for i := 0; i < b.N; i++ {
+		bmData[i] = fmt.Sprintf("%d", i)
+	}
+	b.ResetTimer()
+	for i := 0; i < 2 * b.N; i++ {
+		go func(i int) {
+			if i % 2 == 0 {
+				q.enqueue([]byte(bmData[i/2]))
+			} else {
+				q.dequeue()
+			}
+		}(i)
+	}
+
+}
+
