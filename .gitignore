@@ -22,5 +22,6 @@ _testmain.go
 *.exe
 
 qserver
+testqclient
 src/qclient/qclient.test
 src/qserver/qserver.test

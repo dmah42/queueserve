@@ -11,4 +11,7 @@ go install qclient
 echo "building qserver"
 go build qserver
 
+echo "building test client"
+go build testqclient
+
 echo "done"
