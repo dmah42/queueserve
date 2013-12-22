@@ -41,7 +41,7 @@ func TestSingleGoroutine(t *testing.T) {
 	}
 }
 
-func TestWrite(t *testing.T) {
+func TestEnqueue(t *testing.T) {
 	var waitgroup sync.WaitGroup
 	for i := 0; i < *count; i++ {
 		s := fmt.Sprintf("%d", i)
@@ -55,7 +55,7 @@ func TestWrite(t *testing.T) {
 	waitgroup.Wait()
 }
 
-func BenchmarkWrite(b *testing.B) {
+func BenchmarkEnqueue(b *testing.B) {
 	bmData := make([]string, b.N)
 	for i := 0; i < b.N; i++ {
 		bmData[i] = fmt.Sprintf("%d", i)
@@ -72,7 +72,7 @@ func BenchmarkWrite(b *testing.B) {
 	waitgroup.Wait()
 }
 
-func TestRead(t *testing.T) {
+func TestDequeue(t *testing.T) {
 	var waitgroup sync.WaitGroup
 
 	var results []*string
@@ -106,17 +106,14 @@ func TestRead(t *testing.T) {
 	}
 }
 
-/* TODO
-func BenchmarkRead(b *testing.B) {
-	bmData := make([]string, b.N)
+// NOTE: this is a potentially long-running test. Best to run under short times.
+func BenchmarkDequeue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		bmData[i] = fmt.Sprintf("%d", i)
-		q.enqueue([]byte(bmData[i]))
+		q.enqueue([]byte(fmt.Sprintf("%d", i)))
 	}
 
 	var waitgroup sync.WaitGroup
 	waitgroup.Add(b.N)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		go func() {
@@ -126,9 +123,8 @@ func BenchmarkRead(b *testing.B) {
 	}
 	waitgroup.Wait()
 }
-*/
 
-func TestReadWrite(t *testing.T) {
+func TestEnqueueDequeue(t *testing.T) {
 	enq := make(chan int)
 	deq := make(chan int)
 
@@ -193,11 +189,13 @@ func TestReadWrite(t *testing.T) {
 	}
 }
 
-func BenchmarkReadWrite(b *testing.B) {
+func BenchmarkEnqueueDequeue(b *testing.B) {
 	bmData := make([]string, b.N)
 	for i := 0; i < b.N; i++ {
 		bmData[i] = fmt.Sprintf("%d", i)
 	}
+	var waitgroup sync.WaitGroup
+	waitgroup.Add(2 * b.N)
 	b.ResetTimer()
 	for i := 0; i < 2 * b.N; i++ {
 		go func(i int) {
@@ -206,8 +204,9 @@ func BenchmarkReadWrite(b *testing.B) {
 			} else {
 				q.dequeue()
 			}
+			waitgroup.Done()
 		}(i)
 	}
-
+	waitgroup.Wait()
 }
 
