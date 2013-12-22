@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -209,12 +210,16 @@ func TestConcurrentEnqueue(t *testing.T) {
 func TestConcurrentDequeue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
 
+	var waitgroup sync.WaitGroup
+	waitgroup.Add(*load)
 	for i := 0; i < *load; i++ {
 		s := fmt.Sprintf("%d", i)
 		go func() {
 			Enqueue(id, []byte(s))
+			waitgroup.Done()
 		}()
 	}
+	waitgroup.Wait()
 
 	errorChan := make(chan int)
 	for i := 0; i < *load; i++ {
@@ -222,8 +227,7 @@ func TestConcurrentDequeue(t *testing.T) {
 			resp, err := Read(id, 2)
 			if err != nil {
 				errorChan <- 1
-			}
-			if err = Dequeue(id, resp.EntityId); err != nil {
+			} else if err = Dequeue(id, resp.EntityId); err != nil {
 				errorChan <- 1
 			}
 			if i+1 == *load {
