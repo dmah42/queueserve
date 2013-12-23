@@ -37,7 +37,7 @@ func main() {
 		} else {
 			resp, err := qclient.Read(id, readTimeout)
 			if err != nil {
-//				log.Printf("read: %v", err)
+				// We may attempt to read from an empty queue - this is ok in this client.
 				continue
 			}
 			if err = qclient.Dequeue(id, resp.EntityId); err != nil {
