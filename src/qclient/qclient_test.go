@@ -48,8 +48,13 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	CreateQueue(queueName)
-	id, err := GetQueue(queueName)
+	id, err := CreateQueue(queueName)
+	defer DeleteQueue(id)
+	if err != nil {
+		t.Errorf("unexpected create error: %v", err)
+		return
+	}
+	id, err = GetQueue(queueName)
 	if err != nil {
 		t.Errorf("unexpected get error: %v", err)
 		return
@@ -58,31 +63,31 @@ func TestGet(t *testing.T) {
 		t.Errorf("want %q, got %q", queueName, id)
 		return
 	}
-	DeleteQueue(id)
 }
 
 func TestDuplicateCreate(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	_, err := CreateQueue(queueName)
 	if err == nil {
 		t.Errorf("expected duplicate creation error")
 		return
 	}
-	DeleteQueue(id)
 }
 
 func TestEnqueue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	err := Enqueue(id, object)
 	if err != nil {
 		t.Errorf("unexpected enqueue error: %v", err)
 		return
 	}
-	DeleteQueue(queueName)
 }
 
 func TestReadDequeue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	Enqueue(id, object)
 	response, err := Read(id, 2)
 	if err != nil {
@@ -103,11 +108,11 @@ func TestReadDequeue(t *testing.T) {
 		t.Errorf("expected read error on empty queue")
 		return
 	}
-	DeleteQueue(id)
 }
 
 func TestReadTimeout(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	Enqueue(id, object)
 	response, err := Read(id, 2)
 	if err != nil {
@@ -139,34 +144,30 @@ func TestReadTimeout(t *testing.T) {
 	_, err = Read(id, 2)
 	if err == nil {
 		t.Errorf("expected read error on empty queue")
-		return
 	}
-	DeleteQueue(id)
 }
 
 func TestReadWithoutEnqueue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	_, err := Read(id, 2)
 	if err == nil {
 		t.Errorf("expected read error on empty queue")
-		return
 	}
-	DeleteQueue(id)
 }
 
 func TestDequeueWithoutRead(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 	Enqueue(id, object)
 	if err := Dequeue(id, "0"); err == nil {
 		t.Errorf("expected dequeue error without read")
-		return
 	}
-	DeleteQueue(id)
 }
 
-// TODO: benchmark
 func TestConcurrentEnqueue(t *testing.T) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
 
 	errorChan := make(chan int)
 	for i := 0; i < *load; i++ {
@@ -184,11 +185,7 @@ func TestConcurrentEnqueue(t *testing.T) {
 
 	var errorCount int
 	done := false
-	for {
-		if done {
-			break
-		}
-
+	for !done {
 		select {
 			case i := <-errorChan:
 				if i < 0 {
@@ -201,14 +198,44 @@ func TestConcurrentEnqueue(t *testing.T) {
 
 	if errorCount != 0 {
 		t.Errorf("Expected 0 errors, got %d", errorCount)
-		return
 	}
-	DeleteQueue(id)
 }
 
-// TODO: benchmark
-func TestConcurrentDequeue(t *testing.T) {
+func BenchmarkConcurrentEnqueue(b *testing.B) {
 	id, _ := CreateQueue(queueName)
+	defer DeleteQueue(id)
+
+	bmData := make([]string, b.N)
+	for i := 0; i < b.N; i++ {
+		bmData[i] = fmt.Sprintf("%d", i)
+	}
+	doneChan := make(chan int)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func(i int) {
+			Enqueue(id, []byte(bmData[i]))
+			if i+1 == b.N {
+				doneChan <- 1
+			}
+		}(i)
+	}
+
+	done := false
+	for !done {
+		select {
+			case <-doneChan:
+				done = true
+		}
+	}
+}
+
+func TestConcurrentDequeue(t *testing.T) {
+	id, err := CreateQueue(queueName)
+	defer DeleteQueue(id)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
 
 	var waitgroup sync.WaitGroup
 	waitgroup.Add(*load)
@@ -238,11 +265,7 @@ func TestConcurrentDequeue(t *testing.T) {
 
 	var errorCount int
 	done := false
-	for {
-		if done {
-			break
-		}
-
+	for !done {
 		select {
 			case i := <-errorChan:
 				if i < 0 {
@@ -255,9 +278,48 @@ func TestConcurrentDequeue(t *testing.T) {
 
 	if errorCount != 0 {
 		t.Errorf("Expected 0 errors, got %d", errorCount)
-		return
 	}
-	DeleteQueue(id)
 }
 
-// TODO: concurrent enqueue/dequeue
+func BenchmarkConcurrentDequeue(b *testing.B) {
+	id, err := CreateQueue(queueName)
+	defer DeleteQueue(id)
+	if err != nil {
+		b.Errorf("%v", err)
+		return
+	}
+
+	var waitgroup sync.WaitGroup
+	waitgroup.Add(b.N)
+	for i := 0; i < b.N; i++ {
+		s := fmt.Sprintf("%d", i)
+		go func() {
+			Enqueue(id, []byte(s))
+			waitgroup.Done()
+		}()
+	}
+	waitgroup.Wait()
+
+	doneChan := make(chan int)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func(i int) {
+			resp, err := Read(id, 2)
+			if err == nil {
+				Dequeue(id, resp.EntityId)
+			}
+			if i+1 == b.N {
+				doneChan <- 1
+			}
+		}(i)
+	}
+
+	done := false
+	for !done {
+		select {
+			case <-doneChan:
+				done = true
+		}
+	}
+}
+

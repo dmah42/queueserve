@@ -152,11 +152,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	var enqCount, deqCount int
 	enqEnd, deqEnd := false, false
 
-	for {
-		if enqEnd && deqEnd {
-			break
-		}
-
+	for !(enqEnd && deqEnd) {
 		select {
 		case i := <-enq:
 			if i < 0 {
