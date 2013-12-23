@@ -116,7 +116,7 @@ func enqueueHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: extend getFormValue to take a slice of keys and return errors as appropriate.
+	// TODO: extend getFormValue to take a slice of keys 
 	if len(r.Form["object"]) == 0 {
 		http.Error(w, "Missing object field", http.StatusBadRequest)
 		return

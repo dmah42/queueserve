@@ -39,18 +39,27 @@ func apiUrl(path string) string {
 	return fmt.Sprintf("http://%s:%d/%s", Host, Port, path)
 }
 
-func CreateQueue(name string) (qcommon.QueueId, error) {
-	resp, err := http.PostForm(apiUrl("create"), url.Values{"name": {name}})
+func getBody(path string, values url.Values) ([]byte, error) {
+	resp, err := http.PostForm(apiUrl(path), values)
 	if err != nil {
-		return nullId, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nullId, err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nullId, fmt.Errorf("%s: %s", resp.Status, string(body))
+		return nil, fmt.Errorf("%s: %s", resp.Status, string(body))
+	}
+
+	return body, nil
+}
+
+func CreateQueue(name string) (qcommon.QueueId, error) {
+	body, err := getBody("create", url.Values{"name": {name}})
+	if err != nil {
+		return nullId, err
 	}
 
 	idData := new(qcommon.IdData)
@@ -62,17 +71,9 @@ func CreateQueue(name string) (qcommon.QueueId, error) {
 }
 
 func GetQueue(name string) (qcommon.QueueId, error) {
-	resp, err := http.PostForm(apiUrl("get"), url.Values{"name": {name}})
+	body, err := getBody("get", url.Values{"name": {name}})
 	if err != nil {
 		return nullId, err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nullId, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nullId, fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	idData := new(qcommon.IdData)
@@ -84,37 +85,13 @@ func GetQueue(name string) (qcommon.QueueId, error) {
 }
 
 func DeleteQueue(id qcommon.QueueId) error {
-	resp, err := http.PostForm(apiUrl("delete"), url.Values{"id": {string(id)}})
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, string(body))
-	}
-
-	return nil
+	_, err := getBody("delete", url.Values{"id": {string(id)}})
+	return err
 }
 
 func Enqueue(id qcommon.QueueId, object qcommon.Object) error {
-	resp, err := http.PostForm(apiUrl("enqueue"), url.Values{"id": {string(id)}, "object": {string(object)}})
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, string(body))
-	}
-
-	return nil
+	_, err := getBody("enqueue", url.Values{"id": {string(id)}, "object": {string(object)}})
+	return err
 }
 
 func readTimeout(readResponse *ReadResponse) {
@@ -127,18 +104,9 @@ func readTimeout(readResponse *ReadResponse) {
 // Dequeue can then be implemented as a cancelation of the timeout. This ensures that the same
 // object won't be dequeued from the server while it is being read.
 func Read(id qcommon.QueueId, timeout time.Duration) (*ReadResponse, error) {
-	resp, err := http.PostForm(apiUrl("dequeue"), url.Values{"id": {string(id)}})
+	body, err := getBody("dequeue", url.Values{"id": {string(id)}})
 	if err != nil {
 		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 
 	idObjectData := new(qcommon.IdObjectData)
